@@ -1,0 +1,1108 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F3F3F2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0B0B" media="(prefers-color-scheme: dark)">
+<title>Clock</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23111'/%3E%3Cpath d='M16 8v8l5 3' stroke='%23FF5F1F' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{
+  color-scheme: light dark;
+  --bg:#F3F3F2; --surface:#FFFFFF; --sunk:#E7E7E6; --line:#DCDCDB;
+  --fg:#111111; --fg2:#6B6B6A; --fg3:#ABABAA;
+  --accent:#CC420B; --on-accent:#FFFFFF; --knob:#FFFFFF;
+  --font: system-ui, -apple-system, "Segoe UI Variable Display", "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  --hero: clamp(80px, 26vw, 144px);
+  --tab-h: 64px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0B0B0B; --surface:#161616; --sunk:#202020; --line:#262626;
+    --fg:#F2F2F2; --fg2:#8E8E8E; --fg3:#525252;
+    --accent:#FF6A2B; --on-accent:#0B0B0B; --knob:#F2F2F2;
+  }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
+button:disabled{cursor:default}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.f{fill:currentColor;stroke:none}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+ul,ol{list-style:none;margin:0;padding:0}
+
+/* ---------- shell ---------- */
+.app{max-width:560px;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column}
+body.wall .app{max-width:none}
+main{flex:1;position:relative;overflow:hidden}
+.view{position:absolute;inset:0;overflow-y:auto;padding:env(safe-area-inset-top) 16px 32px;scrollbar-width:none}
+.view::-webkit-scrollbar{display:none}
+.tabs{flex:none;border-top:1px solid var(--line);background:var(--bg);padding-bottom:env(safe-area-inset-bottom)}
+.tabs-in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);height:var(--tab-h)}
+.tab{display:grid;place-items:center;color:var(--fg3)}
+.tab[aria-selected=true]{color:var(--fg)}
+.tab svg.i{width:26px;height:26px}
+
+.bar{height:56px;display:flex;align-items:center;justify-content:flex-end;gap:4px;margin:0 -8px}
+.ib{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:var(--fg)}
+@media (hover:hover){.ib:hover{background:var(--sunk)}}
+
+.big-add{display:grid;place-items:center;width:72px;height:72px;margin:48px auto;border-radius:50%;background:var(--sunk);color:var(--fg)}
+.big-add svg.i{width:32px;height:32px}
+
+/* ---------- shared hero number ---------- */
+.hero{padding:8px 0 32px}
+.hero-t{font-size:var(--hero);font-weight:600;line-height:.92;letter-spacing:-0.045em;white-space:nowrap}
+.hero-t .sec{font-size:.28em;font-weight:500;letter-spacing:0;color:var(--accent);margin-left:.12em}
+.meta{font-size:17px;font-weight:500;color:var(--fg2);height:24px;display:flex;align-items:center;gap:8px}
+.hero .meta:first-child{margin-bottom:8px}
+.hero .meta:last-child{margin-top:16px}
+.meta svg.i{width:16px;height:16px;color:var(--fg2)}
+
+.rows{border-top:1px solid var(--line)}
+.row{display:flex;align-items:center;gap:12px;min-height:88px;border-bottom:1px solid var(--line);background:var(--bg)}
+
+/* ---------- world ---------- */
+.c-name{flex:1;min-width:0;font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-name .wd{font-weight:500;color:var(--fg2);margin-left:8px}
+.c-time{display:flex;align-items:baseline;gap:8px;white-space:nowrap}
+.off{font-size:15px;font-weight:600;color:var(--fg2);min-width:3ch;text-align:right}
+.c-time .t{font-size:40px;font-weight:500;letter-spacing:-0.03em;line-height:1}
+.row .del,.row .handle{display:none;color:var(--fg2)}
+.editing .row .del,.editing .row .handle{display:grid}
+.editing .row .handle{cursor:grab;touch-action:none}
+.editing .row .c-time{opacity:.35}
+.row.dragging{position:relative;z-index:1;border-color:transparent;box-shadow:0 0 0 1px var(--line),0 8px 24px rgb(0 0 0 / .12);border-radius:12px;background:var(--surface);padding:0 8px;margin:0 -8px}
+.row.dragging .handle{cursor:grabbing}
+
+/* ---------- alarm ---------- */
+.a-hero{display:grid;grid-template-columns:1fr auto;align-items:start;padding:8px 0 32px}
+.a-hero .a-main{text-align:left;display:block}
+.days{display:flex;gap:12px;font-size:15px;font-weight:600}
+.days span{color:var(--fg3)}
+.days .on{color:var(--fg)}
+.days .nx{color:var(--accent)}
+.a-hero .days{margin-top:16px;gap:16px;font-size:17px}
+.alarm .a-main{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:16px 0;text-align:left}
+.alarm .t{font-size:48px;font-weight:500;letter-spacing:-0.03em;line-height:1}
+.alarm.off .t{color:var(--fg3)}
+.alarm .days{font-size:13px;gap:8px}
+.alarm.off .days span{color:var(--fg3)}
+
+.sw{flex:none;position:relative;width:52px;height:32px;border-radius:16px;background:var(--sunk)}
+.sw::after{content:"";position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:var(--knob);box-shadow:0 1px 2px rgb(0 0 0 / .2);transition:transform .16s var(--ease),background-color .16s var(--ease)}
+.sw[aria-checked=true]{background:var(--accent)}
+.sw[aria-checked=true]::after{transform:translateX(20px)}
+.a-hero .sw{margin-top:4px}
+
+/* ---------- stopwatch ---------- */
+.sw-disp{font-size:clamp(64px,24vw,136px);font-weight:600;letter-spacing:-0.045em;line-height:.92;white-space:nowrap;padding:8px 0 0}
+.sw-disp.long{font-size:clamp(48px,17vw,100px)}
+.sw-disp .cs{font-size:.56em;color:var(--fg2);letter-spacing:-0.03em}
+.ctl{display:flex;justify-content:space-between;align-items:center;padding:32px 0}
+.rb{width:80px;height:80px;border-radius:50%;display:grid;place-items:center;background:var(--sunk);color:var(--fg)}
+.rb svg.i{width:28px;height:28px}
+.rb.go{background:var(--accent);color:var(--on-accent)}
+.rb.halt{background:var(--fg);color:var(--bg)}
+.rb:disabled{color:var(--fg3)}
+.lap{display:grid;grid-template-columns:40px 16px 1fr auto;align-items:center;gap:8px;min-height:56px;border-bottom:1px solid var(--line);font-weight:500}
+.lap .n{font-size:15px;color:var(--fg3)}
+.lap .lt{font-size:24px;letter-spacing:-0.02em;color:var(--fg2)}
+.lap .tt{font-size:15px;color:var(--fg2)}
+.lap .mk{width:16px;height:16px}
+.lap.cur .lt{color:var(--fg)}
+.lap.fast .lt,.lap.fast .mk{color:var(--accent)}
+.lap.slow .lt,.lap.slow .mk{color:var(--fg)}
+.lap.enter{animation:lapin .3s var(--ease)}
+@keyframes lapin{from{transform:translateY(-8px);opacity:0}to{transform:none;opacity:1}}
+
+/* ---------- timer ---------- */
+.t-entry{font-size:clamp(56px,17vw,104px);font-weight:600;letter-spacing:-0.04em;line-height:.92;white-space:nowrap;padding:8px 0 0}
+.t-entry .d{color:var(--fg)}
+.t-entry .d.z,.t-entry .c{color:var(--fg3)}
+.presets{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:32px -16px 0;padding:0 16px}
+.presets::-webkit-scrollbar{display:none}
+.pre{flex:none;height:40px;padding:0 16px;border-radius:20px;border:1px solid var(--line);font-size:15px;font-weight:600}
+.pre[aria-pressed=true]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:320px;margin:24px auto 0}
+.key{height:60px;border-radius:12px;font-size:28px;font-weight:500;display:grid;place-items:center}
+@media (hover:hover){.key:hover{background:var(--sunk)}}
+.key:active{background:var(--sunk)}
+.t-go{display:flex;justify-content:center;padding:24px 0 8px}
+
+.t-run{display:flex;flex-direction:column;align-items:center}
+.ring{position:relative;width:min(100%,320px);aspect-ratio:1;margin-top:8px}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:6}
+.ring .trk{stroke:var(--sunk)}
+.ring .prg{stroke:var(--accent);stroke-linecap:round}
+.t-run.paused .prg{stroke:var(--fg3)}
+.ring-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.rem{font-size:72px;font-weight:600;letter-spacing:-0.045em;line-height:.92}
+.rem.long{font-size:56px}
+.t-run.paused .rem{color:var(--fg3)}
+.t-end{font-size:17px;font-weight:500;color:var(--fg2)}
+.plus{height:40px;padding:0 16px;border-radius:20px;border:1px solid var(--line);font-size:15px;font-weight:600;margin-top:24px}
+.t-run .ctl{width:100%}
+
+/* ---------- wallpaper ---------- */
+.wall-v{padding:0;display:flex;flex-direction:column;overflow:hidden}
+.stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;min-height:0;user-select:none;-webkit-user-select:none}
+.dg{display:flex;align-items:baseline;justify-content:center;font-weight:600;letter-spacing:-0.05em;line-height:.85;white-space:nowrap}
+.dg .ss{color:var(--accent)}
+.dg[data-s=thin]{font-size:min(27vw,48vh);font-weight:200;letter-spacing:-0.04em}
+.dg[data-s=thin] .ss{font-size:.24em;font-weight:400;margin-left:.15em;letter-spacing:0}
+.dg[data-s=thin] .c2{display:none}
+.dg[data-s=heavy]{flex-direction:column;align-items:center;font-size:min(44vw,36vh);font-weight:700;line-height:.82}
+.dg[data-s=heavy] .c1,.dg[data-s=heavy] .c2,.dg[data-s=heavy] .ss{display:none}
+.dg[data-s=full]{font-size:min(20vw,36vh);font-weight:500;letter-spacing:-0.04em}
+.dg[data-s=full] .c1,.dg[data-s=full] .c2{color:var(--fg3)}
+.wd-date{font-size:clamp(17px,2.4vmin,28px);font-weight:500;color:var(--fg2)}
+.an{width:min(84vw,62vh);height:min(84vw,62vh)}
+.an .mk1{stroke:var(--fg3);stroke-width:1}
+.an .mk5{stroke:var(--fg);stroke-width:2.5;stroke-linecap:round}
+.an .bar5{stroke:var(--fg);stroke-width:7}
+.an .bar12{stroke:var(--accent);stroke-width:7}
+.an .nmr{fill:var(--fg);font:500 15px var(--font);text-anchor:middle;dominant-baseline:central}
+.an .dot{fill:var(--fg)}
+.an .rim{fill:none;stroke:var(--line);stroke-width:1}
+.an .hh,.an .mh{stroke:var(--fg);stroke-linecap:round}
+.an .hh{stroke-width:6}.an .mh{stroke-width:4}
+.an .sh{stroke:var(--accent);stroke-width:1.5;stroke-linecap:round}
+.an .hub{fill:var(--accent)}
+.an[data-s=bars] .hh{stroke-width:9}.an[data-s=bars] .mh{stroke-width:6}
+.an[data-s=plain] .hh{stroke-width:4}.an[data-s=plain] .mh{stroke-width:2.5}
+
+.wctl{flex:none;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px 16px;padding:16px 16px 24px}
+.seg{display:flex;background:var(--sunk);border-radius:22px;padding:2px}
+.seg button{width:44px;height:40px;border-radius:20px;display:grid;place-items:center;color:var(--fg2)}
+.seg button[aria-pressed=true]{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgb(0 0 0 / .12)}
+.styles{display:flex;gap:8px}
+.st{width:48px;height:44px;border-radius:12px;display:grid;place-items:center;color:var(--fg2);border:1px solid transparent}
+.st[aria-pressed=true]{border-color:var(--fg);color:var(--fg)}
+.st svg{width:32px;height:32px}
+.tg{color:var(--fg3)}
+.tg[aria-pressed=true]{color:var(--accent)}
+body.immersive .tabs{display:none}
+body.immersive .wctl{visibility:hidden}
+body.immersive.peek .wctl{visibility:visible}
+body.immersive .stage{cursor:none}
+body.immersive.peek .stage{cursor:default}
+
+/* ---------- sheets ---------- */
+dialog{border:0;padding:0;background:var(--surface);color:var(--fg);width:100%;max-width:560px;margin:auto auto 0;border-radius:20px 20px 0 0;max-height:88dvh;padding-bottom:env(safe-area-inset-bottom)}
+dialog[open]{display:flex;flex-direction:column}
+dialog::backdrop{background:rgb(0 0 0 / .45)}
+@media (min-width:640px){dialog{margin:auto;max-width:440px;border-radius:20px}}
+.sh-h{display:flex;align-items:center;gap:4px;padding:8px}
+.sh-h .sp{flex:1}
+.ok{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent)}
+#sheet-city{height:88dvh}
+@media (min-width:640px){#sheet-city{height:min(640px,88dvh)}}
+.search{position:relative;margin:0 16px 8px}
+.search svg{position:absolute;left:12px;top:12px;color:var(--fg3)}
+.search input{width:100%;height:48px;border:0;border-radius:12px;background:var(--sunk);color:var(--fg);font:inherit;font-size:17px;padding:0 16px 0 44px}
+.search input:focus{outline:2px solid var(--accent);outline-offset:-2px}
+.res-l{flex:1;overflow-y:auto;padding:0 16px 16px}
+.res{width:100%;display:flex;align-items:center;gap:12px;min-height:56px;border-bottom:1px solid var(--line);text-align:left}
+.res .c-name{font-weight:500}
+.res .t{font-size:20px;font-weight:500}
+.res:disabled{color:var(--fg3)}
+.res:disabled .off{color:var(--fg3)}
+.res .chk{width:20px;height:20px}
+
+.a-edit{padding:16px 16px 32px;display:flex;flex-direction:column;align-items:center;gap:32px}
+.tset{display:flex;align-items:center;gap:4px}
+.tcol{display:flex;flex-direction:column;align-items:center}
+.tcol .ib{color:var(--fg2)}
+.tin{width:1.3em;font:inherit;font-size:80px;font-weight:600;letter-spacing:-0.04em;line-height:1;text-align:center;background:none;border:0;color:var(--fg);border-radius:12px;padding:0;caret-color:var(--accent)}
+.tin:focus{outline:0;background:var(--sunk)}
+.tset .c{font-size:80px;font-weight:600;color:var(--fg3);line-height:1;padding-bottom:8px}
+.dpick{display:flex;gap:4px}
+.dpick button{width:40px;height:40px;border-radius:50%;font-size:15px;font-weight:600;color:var(--fg2)}
+.dpick button[aria-pressed=true]{background:var(--fg);color:var(--bg)}
+
+/* ---------- alert ---------- */
+#alert{position:fixed;inset:0;z-index:10;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:48px;padding:16px}
+.al-t{font-size:clamp(96px,30vw,220px);font-weight:600;letter-spacing:-0.05em;line-height:.9;white-space:nowrap}
+.al-t.over{color:var(--accent)}
+.al-stop{width:96px;height:96px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center}
+.al-stop svg.i{width:32px;height:32px}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 21h4"/></symbol>
+  <symbol id="i-watch" viewBox="0 0 24 24"><circle cx="12" cy="14" r="7"/><path d="M12 14v-3.5M10 3h4M12 3v4M18 8l1.5-1.5"/></symbol>
+  <symbol id="i-glass" viewBox="0 0 24 24"><path d="M7 3h10M7 21h10M8 3v3a4 4 0 0 0 1.6 3.2L12 11l2.4-1.8A4 4 0 0 0 16 6V3M8 21v-3a4 4 0 0 1 1.6-3.2L12 13l2.4 1.8A4 4 0 0 1 16 18v3"/></symbol>
+  <symbol id="i-screen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M12 7.5v3l2 1.2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" stroke-width="3.2"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4h11l-2.5 4.5L17 13H6"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3L4.5 9M4.5 4.5V9H9"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M9 5h11v14H9l-6-7z"/><path d="M12.5 9.5l5 5M17.5 9.5l-5 5"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+  <symbol id="i-digital" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M7 9.5v5M10.5 9.5h3v2.5h-3v2.5h3M17 9.5v5"/></symbol>
+  <symbol id="i-analog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="i-shrink" viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
+  <symbol id="i-fast" viewBox="0 0 24 24"><path d="M12 6l7 11H5z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-slow" viewBox="0 0 24 24"><path d="M12 18L5 7h14z" fill="currentColor" stroke="none"/></symbol>
+</svg>
+
+<div class="app">
+<main>
+  <!-- 1 world -->
+  <section class="view" id="v-world" role="tabpanel">
+    <div class="bar">
+      <button class="ib" id="w-edit" aria-label="編集"><svg class="i"><use href="#i-edit"/></svg></button>
+      <button class="ib" id="w-add" aria-label="都市を追加"><svg class="i"><use href="#i-plus"/></svg></button>
+    </div>
+    <div class="hero">
+      <div class="meta" id="w-local"></div>
+      <div class="hero-t num" id="w-time"></div>
+      <div class="meta num" id="w-date"></div>
+    </div>
+    <ul class="rows" id="w-list"></ul>
+    <button class="big-add" id="w-empty" aria-label="都市を追加"><svg class="i"><use href="#i-plus"/></svg></button>
+  </section>
+
+  <!-- 2 alarm -->
+  <section class="view" id="v-alarm" role="tabpanel" hidden>
+    <div class="bar">
+      <button class="ib" id="a-add" aria-label="アラームを追加"><svg class="i"><use href="#i-plus"/></svg></button>
+    </div>
+    <div class="a-hero" id="a-hero">
+      <button class="a-main" id="a-hero-main">
+        <div class="meta num"><svg class="i"><use href="#i-glass"/></svg><span id="a-cd"></span></div>
+        <div class="hero-t num" id="a-hero-t"></div>
+        <div class="days" id="a-hero-d"></div>
+      </button>
+      <button class="sw" role="switch" aria-checked="true" id="a-hero-sw" aria-label="オンオフ"></button>
+    </div>
+    <ul class="rows" id="a-list"></ul>
+    <button class="big-add" id="a-empty" aria-label="アラームを追加"><svg class="i"><use href="#i-plus"/></svg></button>
+  </section>
+
+  <!-- 3 stopwatch -->
+  <section class="view" id="v-sw" role="tabpanel" hidden>
+    <div class="bar"></div>
+    <div class="sw-disp num" id="s-disp"><span id="s-main">00:00</span><span class="cs" id="s-cs">.00</span></div>
+    <div class="ctl">
+      <button class="rb" id="s-left" aria-label="ラップ"><svg class="i"><use href="#i-flag"/></svg></button>
+      <button class="rb go" id="s-right" aria-label="スタート"><svg class="i"><use href="#i-play"/></svg></button>
+    </div>
+    <ol id="s-laps"></ol>
+  </section>
+
+  <!-- 4 timer -->
+  <section class="view" id="v-timer" role="tabpanel" hidden>
+    <div class="bar"></div>
+    <div id="t-set">
+      <div class="t-entry num" id="t-entry"></div>
+      <div class="presets" id="t-pre"></div>
+      <div class="keypad num" id="t-keys"></div>
+      <div class="t-go"><button class="rb go" id="t-start" aria-label="スタート"><svg class="i"><use href="#i-play"/></svg></button></div>
+    </div>
+    <div class="t-run" id="t-run" hidden>
+      <div class="ring">
+        <svg viewBox="0 0 200 200"><circle class="trk" cx="100" cy="100" r="94"/><circle class="prg" id="t-prg" cx="100" cy="100" r="94"/></svg>
+        <div class="ring-c">
+          <div class="rem num" id="t-rem"></div>
+          <div class="t-end meta num"><svg class="i"><use href="#i-bell"/></svg><span id="t-endt"></span></div>
+        </div>
+      </div>
+      <button class="plus num" id="t-plus" aria-label="1分追加">+1:00</button>
+      <div class="ctl">
+        <button class="rb" id="t-cancel" aria-label="キャンセル"><svg class="i"><use href="#i-x"/></svg></button>
+        <button class="rb halt" id="t-pause" aria-label="一時停止"><svg class="i"><use href="#i-pause"/></svg></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 wallpaper -->
+  <section class="view wall-v" id="v-wall" role="tabpanel" hidden>
+    <div class="stage" id="wp-stage">
+      <div class="dg num" id="wp-dg"><span class="hh"></span><span class="c1">:</span><span class="mm"></span><span class="c2">:</span><span class="ss"></span></div>
+      <svg class="an" id="wp-an" viewBox="-100 -100 200 200" hidden>
+        <g id="wp-face"></g>
+        <line class="hh" id="wp-h" x1="0" y1="10" x2="0" y2="-50"/>
+        <line class="mh" id="wp-m" x1="0" y1="12" x2="0" y2="-78"/>
+        <line class="sh" id="wp-s" x1="0" y1="18" x2="0" y2="-86"/>
+        <circle class="hub" r="3.5"/>
+      </svg>
+      <div class="wd-date num" id="wp-date"></div>
+    </div>
+    <div class="wctl" id="wp-ctl">
+      <div class="seg" id="wp-mode">
+        <button data-m="digital" aria-label="デジタル"><svg class="i"><use href="#i-digital"/></svg></button>
+        <button data-m="analog" aria-label="アナログ"><svg class="i"><use href="#i-analog"/></svg></button>
+      </div>
+      <div class="styles" id="wp-styles"></div>
+      <div style="display:flex;gap:4px">
+        <button class="ib tg" id="wp-wake" aria-label="スリープ防止" aria-pressed="false"><svg class="i"><use href="#i-eye"/></svg></button>
+        <button class="ib" id="wp-full" aria-label="全画面"><svg class="i"><use href="#i-expand"/></svg></button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="tabs"><div class="tabs-in" role="tablist">
+  <button class="tab" role="tab" data-v="world" aria-label="世界時計"><svg class="i"><use href="#i-globe"/></svg></button>
+  <button class="tab" role="tab" data-v="alarm" aria-label="アラーム"><svg class="i"><use href="#i-bell"/></svg></button>
+  <button class="tab" role="tab" data-v="sw" aria-label="ストップウォッチ"><svg class="i"><use href="#i-watch"/></svg></button>
+  <button class="tab" role="tab" data-v="timer" aria-label="タイマー"><svg class="i"><use href="#i-glass"/></svg></button>
+  <button class="tab" role="tab" data-v="wall" aria-label="時計壁紙"><svg class="i"><use href="#i-screen"/></svg></button>
+</div></nav>
+</div>
+
+<dialog id="sheet-city" aria-label="都市を追加">
+  <div class="sh-h"><button class="ib" data-close aria-label="閉じる"><svg class="i"><use href="#i-x"/></svg></button></div>
+  <div class="search"><svg class="i"><use href="#i-search"/></svg><input id="city-q" type="search" autocomplete="off" aria-label="検索"></div>
+  <ul class="res-l" id="city-res"></ul>
+</dialog>
+
+<dialog id="sheet-alarm" aria-label="アラーム">
+  <div class="sh-h">
+    <button class="ib" data-close aria-label="閉じる"><svg class="i"><use href="#i-x"/></svg></button>
+    <span class="sp"></span>
+    <button class="ib" id="ae-del" aria-label="削除"><svg class="i"><use href="#i-trash"/></svg></button>
+    <button class="ok" id="ae-ok" aria-label="保存"><svg class="i"><use href="#i-check"/></svg></button>
+  </div>
+  <div class="a-edit">
+    <div class="tset num">
+      <div class="tcol">
+        <button class="ib" data-step="h:1" aria-label="時を増やす"><svg class="i"><use href="#i-up"/></svg></button>
+        <input class="tin num" id="ae-h" inputmode="numeric" maxlength="2" aria-label="時">
+        <button class="ib" data-step="h:-1" aria-label="時を減らす"><svg class="i"><use href="#i-down"/></svg></button>
+      </div>
+      <span class="c">:</span>
+      <div class="tcol">
+        <button class="ib" data-step="m:1" aria-label="分を増やす"><svg class="i"><use href="#i-up"/></svg></button>
+        <input class="tin num" id="ae-m" inputmode="numeric" maxlength="2" aria-label="分">
+        <button class="ib" data-step="m:-1" aria-label="分を減らす"><svg class="i"><use href="#i-down"/></svg></button>
+      </div>
+    </div>
+    <div class="dpick" id="ae-days"></div>
+  </div>
+</dialog>
+
+<div id="alert" role="alertdialog" aria-label="通知" hidden>
+  <div class="al-t num" id="al-t"></div>
+  <button class="al-stop" id="al-stop" aria-label="停止"><svg class="i"><use href="#i-stop"/></svg></button>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const pad = n => String(n).padStart(2, '0');
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('clock.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('clock.' + k, JSON.stringify(v)); } catch {} }
+};
+const WD = ['日','月','火','水','木','金','土'];
+const WD_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const icon = (id, cls = '') => `<svg class="i ${cls}"><use href="#${id}"/></svg>`;
+
+/* ================= time zones ================= */
+const CITIES = [
+  ['tokyo','東京','Asia/Tokyo'],['osaka','大阪','Asia/Tokyo'],['seoul','ソウル','Asia/Seoul'],['beijing','北京','Asia/Shanghai'],
+  ['shanghai','上海','Asia/Shanghai'],['hongkong','香港','Asia/Hong_Kong'],['taipei','台北','Asia/Taipei'],['manila','マニラ','Asia/Manila'],
+  ['singapore','シンガポール','Asia/Singapore'],['kualalumpur','クアラルンプール','Asia/Kuala_Lumpur'],['bangkok','バンコク','Asia/Bangkok'],
+  ['hochiminh','ホーチミン','Asia/Ho_Chi_Minh'],['jakarta','ジャカルタ','Asia/Jakarta'],['delhi','デリー','Asia/Kolkata'],['mumbai','ムンバイ','Asia/Kolkata'],
+  ['kathmandu','カトマンズ','Asia/Kathmandu'],['dhaka','ダッカ','Asia/Dhaka'],['dubai','ドバイ','Asia/Dubai'],['tehran','テヘラン','Asia/Tehran'],
+  ['riyadh','リヤド','Asia/Riyadh'],['istanbul','イスタンブール','Europe/Istanbul'],['moscow','モスクワ','Europe/Moscow'],['cairo','カイロ','Africa/Cairo'],
+  ['nairobi','ナイロビ','Africa/Nairobi'],['johannesburg','ヨハネスブルグ','Africa/Johannesburg'],['lagos','ラゴス','Africa/Lagos'],
+  ['athens','アテネ','Europe/Athens'],['helsinki','ヘルシンキ','Europe/Helsinki'],['berlin','ベルリン','Europe/Berlin'],['paris','パリ','Europe/Paris'],
+  ['rome','ローマ','Europe/Rome'],['madrid','マドリード','Europe/Madrid'],['amsterdam','アムステルダム','Europe/Amsterdam'],
+  ['stockholm','ストックホルム','Europe/Stockholm'],['vienna','ウィーン','Europe/Vienna'],['zurich','チューリッヒ','Europe/Zurich'],
+  ['warsaw','ワルシャワ','Europe/Warsaw'],['london','ロンドン','Europe/London'],['dublin','ダブリン','Europe/Dublin'],['lisbon','リスボン','Europe/Lisbon'],
+  ['reykjavik','レイキャビク','Atlantic/Reykjavik'],['saopaulo','サンパウロ','America/Sao_Paulo'],['buenosaires','ブエノスアイレス','America/Argentina/Buenos_Aires'],
+  ['santiago','サンティアゴ','America/Santiago'],['lima','リマ','America/Lima'],['bogota','ボゴタ','America/Bogota'],['mexicocity','メキシコシティ','America/Mexico_City'],
+  ['newyork','ニューヨーク','America/New_York'],['washington','ワシントン','America/New_York'],['toronto','トロント','America/Toronto'],
+  ['chicago','シカゴ','America/Chicago'],['denver','デンバー','America/Denver'],['losangeles','ロサンゼルス','America/Los_Angeles'],
+  ['sanfrancisco','サンフランシスコ','America/Los_Angeles'],['seattle','シアトル','America/Los_Angeles'],['vancouver','バンクーバー','America/Vancouver'],
+  ['anchorage','アンカレッジ','America/Anchorage'],['honolulu','ホノルル','Pacific/Honolulu'],['guam','グアム','Pacific/Guam'],
+  ['sydney','シドニー','Australia/Sydney'],['melbourne','メルボルン','Australia/Melbourne'],['brisbane','ブリスベン','Australia/Brisbane'],
+  ['adelaide','アデレード','Australia/Adelaide'],['perth','パース','Australia/Perth'],['auckland','オークランド','Pacific/Auckland'],['utc','UTC','UTC']
+];
+const CITY = Object.fromEntries(CITIES.map(c => [c[0], c]));
+const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+const fmts = new Map();
+function partsIn(tz, date) {
+  let f = fmts.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric', second: 'numeric', weekday: 'short' });
+    fmts.set(tz, f);
+  }
+  const o = {};
+  for (const p of f.formatToParts(date)) o[p.type] = p.value;
+  return { y: +o.year, mo: +o.month, d: +o.day, h: +o.hour % 24, mi: +o.minute, s: +o.second, wd: WD_EN.indexOf(o.weekday) };
+}
+function offsetMin(tz, date) {
+  const p = partsIn(tz, date);
+  return Math.round((Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi, p.s) - Math.floor(date.getTime() / 1000) * 1000) / 60000);
+}
+function fmtOff(min) {
+  if (min === 0) return '±0';
+  const a = Math.abs(min), h = Math.floor(a / 60), m = a % 60;
+  return (min > 0 ? '+' : '−') + h + (m ? ':' + pad(m) : '');
+}
+const sameDay = (a, b) => a.y === b.y && a.mo === b.mo && a.d === b.d;
+const localName = (CITIES.find(c => c[2] === LOCAL_TZ) || [0, (LOCAL_TZ.split('/').pop() || '').replace(/_/g, ' ')])[1];
+
+/* ================= audio ================= */
+let actx = null, soundLoop = null, soundStop = null;
+function audio() {
+  if (!actx) {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return null;
+    actx = new C();
+    const b = actx.createBuffer(1, 1, 22050), s = actx.createBufferSource();
+    s.buffer = b; s.connect(actx.destination); s.start(0);
+  }
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+document.addEventListener('pointerdown', audio, { passive: true });
+document.addEventListener('keydown', audio);
+function beep(t, freq, dur, vol = 0.28) {
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'sine'; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(actx.destination);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+function startSound(kind) {
+  stopSound();
+  const a = audio();
+  const pattern = () => {
+    if (a) {
+      const t = a.currentTime + 0.04;
+      if (kind === 'alarm') { beep(t, 880, .16); beep(t + .22, 880, .16); beep(t + .44, 1318.5, .34); }
+      else { for (let i = 0; i < 4; i++) beep(t + i * .14, 1046.5, .09); }
+    }
+    if (navigator.vibrate) navigator.vibrate([180, 90, 180]);
+  };
+  pattern();
+  soundLoop = setInterval(pattern, kind === 'alarm' ? 1400 : 1100);
+  soundStop = setTimeout(stopSound, 3 * 60 * 1000);
+}
+function stopSound() { clearInterval(soundLoop); clearTimeout(soundStop); soundLoop = soundStop = null; if (navigator.vibrate) navigator.vibrate(0); }
+
+/* ================= tabs ================= */
+const VIEWS = ['world', 'alarm', 'sw', 'timer', 'wall'];
+const viewEl = { world: $('#v-world'), alarm: $('#v-alarm'), sw: $('#v-sw'), timer: $('#v-timer'), wall: $('#v-wall') };
+let active = store.get('tab', 'world');
+if (!VIEWS.includes(active)) active = 'world';
+function show(v) {
+  active = v; store.set('tab', v);
+  for (const k of VIEWS) viewEl[k].hidden = k !== v;
+  document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.v === v));
+  document.body.classList.toggle('wall', v === 'wall');
+  if (v !== 'wall') setImmersive(false);
+  if (v === 'alarm') renderAlarms();
+  if (v === 'sw') { renderSW(); updateSW(Date.now()); }
+  if (v === 'timer') renderTimer();
+  if (v === 'wall') renderWall();
+  refresh(new Date());
+  applyWake();
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => show(t.dataset.v)));
+
+/* ================= world ================= */
+let cities = store.get('cities', ['newyork', 'london', 'sydney'].filter(k => CITY[k][2] !== LOCAL_TZ)).filter(k => CITY[k]);
+let editing = false;
+const wList = $('#w-list');
+function saveCities() { store.set('cities', cities); }
+function renderWorld() {
+  if (!cities.length) editing = false;
+  $('#v-world').classList.toggle('editing', editing);
+  $('#w-edit').innerHTML = icon(editing ? 'i-check' : 'i-edit');
+  $('#w-edit').setAttribute('aria-label', editing ? '完了' : '編集');
+  $('#w-edit').hidden = !cities.length;
+  $('#w-add').hidden = !cities.length || editing;
+  $('#w-empty').hidden = cities.length > 0;
+  $('#w-local').textContent = localName;
+  wList.innerHTML = cities.map(k => `<li class="row city" data-k="${k}">
+    <button class="ib del" aria-label="削除">${icon('i-minus')}</button>
+    <div class="c-name"><span>${CITY[k][1]}</span><span class="wd"></span></div>
+    <div class="c-time"><span class="off num"></span><span class="t num"></span></div>
+    <button class="ib handle" aria-label="並べ替え">${icon('i-grip')}</button></li>`).join('');
+  updateWorld(new Date());
+}
+function updateWorld(d) {
+  const lp = partsIn(LOCAL_TZ, d), lo = offsetMin(LOCAL_TZ, d);
+  $('#w-time').innerHTML = `${pad(lp.h)}:${pad(lp.mi)}<span class="sec">${pad(lp.s)}</span>`;
+  $('#w-date').textContent = `${lp.mo}/${lp.d} ${WD[lp.wd]}`;
+  for (const li of wList.children) {
+    const tz = CITY[li.dataset.k][2], p = partsIn(tz, d);
+    li.querySelector('.t').textContent = `${pad(p.h)}:${pad(p.mi)}`;
+    li.querySelector('.off').textContent = fmtOff(offsetMin(tz, d) - lo);
+    li.querySelector('.wd').textContent = sameDay(p, lp) ? '' : WD[p.wd];
+  }
+}
+$('#w-edit').addEventListener('click', () => { editing = !editing; renderWorld(); });
+$('#w-add').addEventListener('click', openCitySheet);
+$('#w-empty').addEventListener('click', openCitySheet);
+wList.addEventListener('click', e => {
+  const del = e.target.closest('.del');
+  if (!del) return;
+  cities = cities.filter(k => k !== del.closest('li').dataset.k);
+  saveCities(); renderWorld();
+});
+wList.addEventListener('pointerdown', e => {
+  const h = e.target.closest('.handle');
+  if (!h || !editing) return;
+  e.preventDefault();
+  const li = h.closest('li');
+  li.classList.add('dragging');
+  const move = ev => {
+    let before = null;
+    for (const s of wList.children) {
+      if (s === li) continue;
+      const r = s.getBoundingClientRect();
+      if (ev.clientY < r.top + r.height / 2) { before = s; break; }
+    }
+    if (before) { if (li.nextElementSibling !== before) wList.insertBefore(li, before); }
+    else if (wList.lastElementChild !== li) wList.appendChild(li);
+  };
+  const up = () => {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    document.removeEventListener('pointercancel', up);
+    li.classList.remove('dragging');
+    cities = [...wList.children].map(x => x.dataset.k);
+    saveCities();
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+  document.addEventListener('pointercancel', up);
+});
+wList.addEventListener('keydown', e => {
+  const h = e.target.closest('.handle');
+  if (!h || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  e.preventDefault();
+  const k = h.closest('li').dataset.k, i = cities.indexOf(k), j = i + (e.key === 'ArrowUp' ? -1 : 1);
+  if (j < 0 || j >= cities.length) return;
+  [cities[i], cities[j]] = [cities[j], cities[i]];
+  saveCities(); renderWorld();
+  wList.querySelector(`[data-k="${k}"] .handle`).focus();
+});
+
+/* city sheet */
+const citySheet = $('#sheet-city'), cityQ = $('#city-q'), cityRes = $('#city-res');
+const kata = s => s.replace(/[ぁ-ゖ]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
+function openCitySheet() { cityQ.value = ''; renderCityRes(); citySheet.showModal(); cityRes.scrollTop = 0; cityQ.focus(); }
+function renderCityRes() {
+  const q = kata(cityQ.value.trim().toLowerCase().replace(/\s+/g, ''));
+  const d = new Date(), lo = offsetMin(LOCAL_TZ, d);
+  const hits = CITIES.filter(c => !q || c[0].includes(q) || kata(c[1].toLowerCase()).includes(q) || c[2].toLowerCase().replace(/_/g, '').includes(q));
+  cityRes.innerHTML = hits.map(c => {
+    const p = partsIn(c[2], d), has = cities.includes(c[0]);
+    return `<li><button class="res" data-k="${c[0]}" ${has ? 'disabled' : ''}>
+      <span class="c-name">${c[1]}</span>
+      <span class="c-time"><span class="off num">${fmtOff(offsetMin(c[2], d) - lo)}</span><span class="t num">${pad(p.h)}:${pad(p.mi)}</span></span>
+      ${has ? icon('i-check', 'chk') : '<span class="chk"></span>'}</button></li>`;
+  }).join('');
+}
+cityQ.addEventListener('input', renderCityRes);
+cityQ.addEventListener('keydown', e => { if (e.key === 'Enter') { const b = cityRes.querySelector('.res:not(:disabled)'); if (b) b.click(); } });
+cityRes.addEventListener('click', e => {
+  const b = e.target.closest('.res');
+  if (!b || b.disabled) return;
+  cities.push(b.dataset.k); saveCities(); renderWorld(); citySheet.close();
+});
+
+/* generic dialog closing */
+document.querySelectorAll('dialog').forEach(dl => {
+  dl.addEventListener('click', e => { if (e.target === dl || e.target.closest('[data-close]')) dl.close(); });
+});
+
+/* ================= alarms ================= */
+let alarms = store.get('alarms', []);
+const saveAlarms = () => store.set('alarms', alarms);
+function nextFire(a, now) {
+  for (let i = 0; i < 8; i++) {
+    const c = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i, a.h, a.m, 0, 0);
+    if (c <= now) continue;
+    if (!a.days.length || a.days.includes(c.getDay())) return c;
+  }
+  return null;
+}
+function daysHtml(a, next) {
+  const nd = next ? next.getDay() : -1;
+  return WD.map((w, i) => `<span class="${i === nd ? 'nx' : a.days.includes(i) ? 'on' : ''}">${w}</span>`).join('');
+}
+let heroId = null;
+function renderAlarms() {
+  const now = new Date();
+  const upcoming = alarms.filter(a => a.on).map(a => ({ a, t: nextFire(a, now) })).filter(x => x.t).sort((x, y) => x.t - y.t);
+  const hero = upcoming[0];
+  heroId = hero ? hero.a.id : null;
+  $('#a-hero').hidden = !hero;
+  if (hero) {
+    $('#a-hero-t').textContent = `${pad(hero.a.h)}:${pad(hero.a.m)}`;
+    $('#a-hero-d').innerHTML = daysHtml(hero.a, hero.t);
+  }
+  const rest = alarms.filter(a => a.id !== heroId).sort((x, y) => (x.h * 60 + x.m) - (y.h * 60 + y.m));
+  $('#a-list').innerHTML = rest.map(a => `<li class="row alarm ${a.on ? '' : 'off'}">
+    <button class="a-main" data-id="${a.id}"><span class="t num">${pad(a.h)}:${pad(a.m)}</span><span class="days">${daysHtml(a, a.on ? nextFire(a, now) : null)}</span></button>
+    <button class="sw" role="switch" aria-checked="${a.on}" data-id="${a.id}" aria-label="オンオフ"></button></li>`).join('');
+  $('#a-list').hidden = !rest.length;
+  $('#a-empty').hidden = alarms.length > 0;
+  $('#a-add').hidden = !alarms.length;
+  updateAlarmHero(now);
+}
+function updateAlarmHero(now) {
+  if (!heroId) return;
+  const a = alarms.find(x => x.id === heroId), t = a && nextFire(a, now);
+  if (!t) return;
+  const mins = Math.ceil((t - now) / 60000);
+  $('#a-cd').textContent = `${Math.floor(mins / 60)}:${pad(mins % 60)}`;
+}
+function toggleAlarm(id) { const a = alarms.find(x => x.id === id); if (!a) return; a.on = !a.on; saveAlarms(); renderAlarms(); }
+$('#a-hero-sw').addEventListener('click', () => toggleAlarm(heroId));
+$('#a-hero-main').addEventListener('click', () => openAlarm(heroId));
+$('#a-list').addEventListener('click', e => {
+  const s = e.target.closest('.sw'); if (s) return toggleAlarm(+s.dataset.id);
+  const m = e.target.closest('.a-main'); if (m) openAlarm(+m.dataset.id);
+});
+$('#a-add').addEventListener('click', () => openAlarm(null));
+$('#a-empty').addEventListener('click', () => openAlarm(null));
+
+/* alarm editor */
+const aSheet = $('#sheet-alarm'), aeH = $('#ae-h'), aeM = $('#ae-m'), aeDays = $('#ae-days');
+let aeId = null, aeSel = [];
+aeDays.innerHTML = WD.map((w, i) => `<button data-d="${i}" aria-pressed="false">${w}</button>`).join('');
+function openAlarm(id) {
+  aeId = id;
+  const a = alarms.find(x => x.id === id);
+  const now = new Date();
+  const base = a || { h: (now.getHours() + 1) % 24, m: 0, days: [] };
+  aeH.value = pad(base.h); aeM.value = pad(base.m); aeSel = [...base.days];
+  paintDays();
+  $('#ae-del').hidden = !a;
+  aSheet.showModal();
+  $('#ae-ok').focus();
+}
+function paintDays() { aeDays.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', aeSel.includes(+b.dataset.d))); }
+aeDays.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const d = +b.dataset.d;
+  aeSel = aeSel.includes(d) ? aeSel.filter(x => x !== d) : [...aeSel, d].sort();
+  paintDays();
+});
+const fieldMax = el => el === aeH ? 24 : 60;
+function readField(el) { const n = parseInt(el.value, 10); return isNaN(n) ? 0 : Math.min(n, fieldMax(el) - 1); }
+function step(el, by) { const mx = fieldMax(el); el.value = pad((readField(el) + by + mx) % mx); }
+aSheet.addEventListener('click', e => {
+  const b = e.target.closest('[data-step]'); if (!b) return;
+  const [f, by] = b.dataset.step.split(':');
+  step(f === 'h' ? aeH : aeM, +by);
+});
+for (const el of [aeH, aeM]) {
+  el.addEventListener('focus', () => el.select());
+  el.addEventListener('input', () => {
+    el.value = el.value.replace(/\D/g, '').slice(0, 2);
+    if (el.value.length === 2 && el === aeH) aeM.focus();
+  });
+  el.addEventListener('blur', () => { el.value = pad(readField(el)); });
+  el.addEventListener('keydown', e => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); step(el, e.key === 'ArrowUp' ? 1 : -1); el.select(); }
+    if (e.key === 'Enter') { e.preventDefault(); $('#ae-ok').click(); }
+  });
+  el.addEventListener('wheel', e => { e.preventDefault(); step(el, e.deltaY < 0 ? 1 : -1); }, { passive: false });
+}
+$('#ae-ok').addEventListener('click', () => {
+  const h = readField(aeH), m = readField(aeM);
+  const a = alarms.find(x => x.id === aeId);
+  if (a) Object.assign(a, { h, m, days: aeSel, on: true, fired: null });
+  else alarms.push({ id: Date.now(), h, m, days: aeSel, on: true, fired: null });
+  saveAlarms(); aSheet.close(); renderAlarms();
+});
+$('#ae-del').addEventListener('click', () => { alarms = alarms.filter(x => x.id !== aeId); saveAlarms(); aSheet.close(); renderAlarms(); });
+
+let lastMinute = -1;
+function checkAlarms(now) {
+  const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
+  for (const a of alarms) {
+    if (!a.on || a.h !== now.getHours() || a.m !== now.getMinutes() || a.fired === key) continue;
+    if (a.days.length && !a.days.includes(now.getDay())) continue;
+    a.fired = key;
+    if (!a.days.length) a.on = false;
+    saveAlarms(); renderAlarms();
+    openAlert('alarm');
+  }
+  if (now.getMinutes() !== lastMinute) { lastMinute = now.getMinutes(); if (active === 'alarm') renderAlarms(); }
+}
+
+/* ================= alert ================= */
+let alertKind = null;
+function openAlert(kind) {
+  alertKind = kind;
+  $('#alert').hidden = false;
+  startSound(kind);
+  updateAlert(Date.now());
+  $('#al-stop').focus();
+}
+function updateAlert(nowMs) {
+  const el = $('#al-t');
+  if (alertKind === 'alarm') {
+    const p = partsIn(LOCAL_TZ, new Date(nowMs));
+    el.textContent = `${pad(p.h)}:${pad(p.mi)}`; el.classList.remove('over');
+  } else if (alertKind === 'timer') {
+    el.textContent = '−' + fmtDur(Math.floor((nowMs - tm.end) / 1000)); el.classList.add('over');
+  }
+}
+function closeAlert() {
+  stopSound();
+  $('#alert').hidden = true;
+  if (alertKind === 'timer') { tm.mode = 'idle'; saveTimer(); renderTimer(); }
+  alertKind = null;
+}
+$('#al-stop').addEventListener('click', closeAlert);
+
+/* ================= stopwatch ================= */
+let sw = store.get('sw', { run: false, start: 0, acc: 0, laps: [] });
+const saveSW = () => store.set('sw', sw);
+const swEl = now => sw.acc + (sw.run ? now - sw.start : 0);
+function fmtSW(ms) {
+  ms = Math.max(0, ms);
+  const cs = Math.floor(ms / 10) % 100, s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+  return { main: (h ? h + ':' + pad(m) : pad(m)) + ':' + pad(s % 60), cs: '.' + pad(cs) };
+}
+const swTxt = ms => { const f = fmtSW(ms); return f.main + f.cs; };
+function renderSW(newLap) {
+  const el = swEl(Date.now());
+  const L = $('#s-left'), R = $('#s-right');
+  R.className = 'rb ' + (sw.run ? 'halt' : 'go');
+  R.innerHTML = icon(sw.run ? 'i-pause' : 'i-play');
+  R.setAttribute('aria-label', sw.run ? 'ストップ' : 'スタート');
+  const reset = !sw.run && el > 0;
+  L.innerHTML = icon(reset ? 'i-reset' : 'i-flag');
+  L.setAttribute('aria-label', reset ? 'リセット' : 'ラップ');
+  L.disabled = !sw.run && el === 0;
+  const laps = sw.laps.map((t, i) => t - (i ? sw.laps[i - 1] : 0));
+  let fi = -1, si = -1;
+  if (laps.length >= 2) {
+    fi = laps.indexOf(Math.min(...laps));
+    si = laps.indexOf(Math.max(...laps));
+    if (fi === si) fi = si = -1;
+  }
+  let html = '';
+  if (laps.length) html += `<li class="lap cur num"><span class="n">${pad(laps.length + 1)}</span><span></span><span class="lt" id="s-cur"></span><span class="tt"></span></li>`;
+  for (let i = laps.length - 1; i >= 0; i--) {
+    const cls = i === fi ? 'fast' : i === si ? 'slow' : '';
+    const mk = i === fi ? icon('i-fast', 'mk') : i === si ? icon('i-slow', 'mk') : '<span></span>';
+    html += `<li class="lap num ${cls} ${newLap && i === laps.length - 1 ? 'enter' : ''}"><span class="n">${pad(i + 1)}</span>${mk}<span class="lt">${swTxt(laps[i])}</span><span class="tt">${swTxt(sw.laps[i])}</span></li>`;
+  }
+  $('#s-laps').innerHTML = html;
+  updateSW(Date.now());
+}
+function updateSW(now) {
+  const el = swEl(now), f = fmtSW(el);
+  $('#s-main').textContent = f.main; $('#s-cs').textContent = f.cs;
+  $('#s-disp').classList.toggle('long', f.main.length > 5);
+  const c = $('#s-cur');
+  if (c) c.textContent = swTxt(el - (sw.laps[sw.laps.length - 1] || 0));
+}
+function swToggle() {
+  const now = Date.now();
+  if (sw.run) { sw.acc += now - sw.start; sw.run = false; } else { sw.start = now; sw.run = true; }
+  saveSW(); renderSW();
+}
+function swLeft() {
+  const now = Date.now();
+  if (sw.run) { sw.laps.push(swEl(now)); saveSW(); renderSW(true); }
+  else if (swEl(now) > 0) { sw = { run: false, start: 0, acc: 0, laps: [] }; saveSW(); renderSW(); }
+}
+$('#s-right').addEventListener('click', swToggle);
+$('#s-left').addEventListener('click', swLeft);
+
+/* ================= timer ================= */
+let tm = store.get('timer', { mode: 'idle', digits: '000500', end: 0, remain: 0, total: 0 });
+if (tm.mode === 'run' && tm.end <= Date.now()) tm.mode = 'idle';
+if (tm.mode === 'done') tm.mode = 'idle';
+let fresh = true, typed = 0;
+const saveTimer = () => store.set('timer', tm);
+const PRESETS = [1, 3, 5, 10, 15, 30, 60];
+const digitsMs = d => ((+d.slice(0, 2)) * 3600 + (+d.slice(2, 4)) * 60 + (+d.slice(4, 6))) * 1000;
+function fmtDur(s) { const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = s % 60; return h ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`; }
+function minsToDigits(m) { return pad(Math.floor(m / 60)) + pad(m % 60) + '00'; }
+$('#t-pre').innerHTML = PRESETS.map(m => `<button class="pre num" data-m="${m}" aria-pressed="false">${m >= 60 ? (m / 60) + ':00:00' : m + ':00'}</button>`).join('');
+$('#t-keys').innerHTML = ['1','2','3','4','5','6','7','8','9','00','0','⌫'].map(k =>
+  k === '⌫' ? `<button class="key" data-k="bk" aria-label="削除">${icon('i-back')}</button>` : `<button class="key" data-k="${k}">${k}</button>`).join('');
+function renderEntry() {
+  const d = tm.digits, lead = fresh ? 0 : 6 - typed;
+  let h = '';
+  for (let i = 0; i < 6; i++) {
+    if (i === 2 || i === 4) h += '<span class="c">:</span>';
+    h += `<span class="d ${i < lead ? 'z' : ''}">${d[i]}</span>`;
+  }
+  $('#t-entry').innerHTML = h;
+  $('#t-start').disabled = digitsMs(d) === 0;
+  document.querySelectorAll('.pre').forEach(b => b.setAttribute('aria-pressed', minsToDigits(+b.dataset.m) === d));
+}
+function keyIn(k) {
+  if (fresh) { tm.digits = '000000'; typed = 0; fresh = false; }
+  if (k === 'bk') { tm.digits = '0' + tm.digits.slice(0, 5); typed = Math.max(0, typed - 1); }
+  else { tm.digits = (tm.digits + k).slice(-6); typed = Math.min(6, typed + k.length); }
+  saveTimer(); renderEntry();
+}
+$('#t-keys').addEventListener('click', e => { const b = e.target.closest('.key'); if (b) keyIn(b.dataset.k); });
+$('#t-pre').addEventListener('click', e => {
+  const b = e.target.closest('.pre'); if (!b) return;
+  tm.digits = minsToDigits(+b.dataset.m); fresh = true; saveTimer(); renderEntry();
+});
+function timerStart() {
+  const ms = digitsMs(tm.digits); if (!ms) return;
+  // normalise e.g. 00:90:00
+  Object.assign(tm, { mode: 'run', total: ms, end: Date.now() + ms, remain: ms });
+  fresh = true; saveTimer(); renderTimer();
+}
+$('#t-start').addEventListener('click', timerStart);
+$('#t-pause').addEventListener('click', () => {
+  const now = Date.now();
+  if (tm.mode === 'run') { tm.remain = Math.max(0, tm.end - now); tm.mode = 'pause'; }
+  else if (tm.mode === 'pause') { tm.end = now + tm.remain; tm.mode = 'run'; }
+  saveTimer(); renderTimer();
+});
+$('#t-cancel').addEventListener('click', () => { tm.mode = 'idle'; saveTimer(); renderTimer(); });
+$('#t-plus').addEventListener('click', () => {
+  if (tm.mode === 'run') tm.end += 60000; else tm.remain += 60000;
+  tm.total += 60000; saveTimer(); renderTimer();
+});
+const CIRC = 2 * Math.PI * 94;
+$('#t-prg').style.strokeDasharray = CIRC;
+function renderTimer() {
+  const running = tm.mode === 'run' || tm.mode === 'pause';
+  $('#t-set').hidden = running;
+  $('#t-run').hidden = !running;
+  if (!running) return renderEntry();
+  const P = $('#t-pause');
+  P.className = 'rb ' + (tm.mode === 'run' ? 'halt' : 'go');
+  P.innerHTML = icon(tm.mode === 'run' ? 'i-pause' : 'i-play');
+  P.setAttribute('aria-label', tm.mode === 'run' ? '一時停止' : '再開');
+  $('#t-run').classList.toggle('paused', tm.mode === 'pause');
+  updateTimer(Date.now());
+}
+let lastRemS = -1;
+function updateTimer(now) {
+  if (tm.mode !== 'run' && tm.mode !== 'pause') return;
+  const rem = tm.mode === 'run' ? Math.max(0, tm.end - now) : tm.remain;
+  const s = Math.ceil(rem / 1000);
+  if (s !== lastRemS || tm.mode === 'pause') {
+    lastRemS = s;
+    const t = fmtDur(s), r = $('#t-rem');
+    r.textContent = t; r.classList.toggle('long', t.length > 5);
+    const endAt = new Date((tm.mode === 'run' ? tm.end : now + tm.remain));
+    const p = partsIn(LOCAL_TZ, endAt);
+    $('#t-endt').textContent = `${pad(p.h)}:${pad(p.mi)}`;
+  }
+  $('#t-prg').style.strokeDashoffset = CIRC * (1 - (tm.total ? rem / tm.total : 0));
+}
+function checkTimer(now) {
+  if (tm.mode === 'run' && now >= tm.end) {
+    tm.mode = 'done'; saveTimer();
+    $('#t-prg').style.strokeDashoffset = CIRC;
+    openAlert('timer');
+  }
+}
+
+/* ================= wallpaper ================= */
+let wp = store.get('wall', { mode: 'digital', digital: 'thin', analog: 'ticks', wake: true });
+const saveWp = () => store.set('wall', wp);
+const STYLE_JA = { thin: '細字', heavy: '太字', full: '秒あり', plain: 'シンプル', ticks: '目盛り', numerals: '数字', bars: 'バー' };
+const STYLES = {
+  digital: [
+    ['thin', '<text x="16" y="21" text-anchor="middle" font-size="15" font-weight="200" fill="currentColor">12</text>'],
+    ['heavy', '<text x="16" y="15" text-anchor="middle" font-size="12" font-weight="800" fill="currentColor">12</text><text x="16" y="27" text-anchor="middle" font-size="12" font-weight="800" fill="currentColor">00</text>'],
+    ['full', '<text x="16" y="20" text-anchor="middle" font-size="8.5" font-weight="500" fill="currentColor">12:00:00</text>']
+  ],
+  analog: [
+    ['plain', '<circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="1" opacity=".35"/><path d="M16 16V8M16 16l5 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'],
+    ['ticks', ticksPreview()],
+    ['numerals', '<g fill="currentColor" font-size="6" font-weight="600" text-anchor="middle"><text x="16" y="9">12</text><text x="26" y="18">3</text><text x="16" y="28">6</text><text x="6" y="18">9</text></g><path d="M16 16v-5M16 16l3 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>'],
+    ['bars', barsPreview()]
+  ]
+};
+function ticksPreview() {
+  let s = '';
+  for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6, l = i % 3 ? 2 : 3.5; s += `<line x1="${16 + Math.sin(a) * 13}" y1="${16 - Math.cos(a) * 13}" x2="${16 + Math.sin(a) * (13 - l)}" y2="${16 - Math.cos(a) * (13 - l)}" stroke="currentColor" stroke-width="${i % 3 ? .8 : 1.5}"/>`; }
+  return s + '<path d="M16 16V9M16 16l4 2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>';
+}
+function barsPreview() {
+  let s = '';
+  for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; s += `<line x1="${16 + Math.sin(a) * 13}" y1="${16 - Math.cos(a) * 13}" x2="${16 + Math.sin(a) * 9}" y2="${16 - Math.cos(a) * 9}" stroke="${i ? 'currentColor' : 'var(--accent)'}" stroke-width="2.4"/>`; }
+  return s + '<path d="M16 16V10M16 16l3.5 2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>';
+}
+function buildFace(style) {
+  const P = (a, r) => [Math.sin(a) * r, -Math.cos(a) * r].map(v => v.toFixed(2));
+  let s = '';
+  if (style === 'plain') {
+    for (let i = 0; i < 4; i++) { const [x, y] = P(i * Math.PI / 2, 90); s += `<circle class="dot" cx="${x}" cy="${y}" r="2.5"/>`; }
+  } else if (style === 'ticks') {
+    for (let i = 0; i < 60; i++) {
+      const a = i * Math.PI / 30, big = i % 5 === 0, [x1, y1] = P(a, 95), [x2, y2] = P(a, big ? 84 : 91);
+      s += `<line class="${big ? 'mk5' : 'mk1'}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    }
+  } else if (style === 'numerals') {
+    for (let i = 0; i < 60; i++) { if (i % 5 === 0) continue; const a = i * Math.PI / 30, [x1, y1] = P(a, 95), [x2, y2] = P(a, 92); s += `<line class="mk1" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`; }
+    for (let i = 1; i <= 12; i++) { const [x, y] = P(i * Math.PI / 6, 80); s += `<text class="nmr num" x="${x}" y="${y}">${i}</text>`; }
+  } else if (style === 'bars') {
+    for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6, [x1, y1] = P(a, 95), [x2, y2] = P(a, 78); s += `<line class="${i ? 'bar5' : 'bar12'}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`; }
+  }
+  return s;
+}
+function renderWall() {
+  const dg = $('#wp-dg'), an = $('#wp-an');
+  dg.hidden = wp.mode !== 'digital'; an.toggleAttribute('hidden', wp.mode !== 'analog');
+  dg.dataset.s = wp.digital; an.dataset.s = wp.analog;
+  $('#wp-face').innerHTML = buildFace(wp.analog);
+  document.querySelectorAll('#wp-mode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === wp.mode));
+  const cur = wp[wp.mode];
+  $('#wp-styles').innerHTML = STYLES[wp.mode].map(([k, svg]) =>
+    `<button class="st" data-s="${k}" aria-pressed="${k === cur}" aria-label="${STYLE_JA[k]}"><svg viewBox="0 0 32 32">${svg}</svg></button>`).join('');
+  $('#wp-wake').hidden = !('wakeLock' in navigator);
+  $('#wp-wake').setAttribute('aria-pressed', !!wakeLock);
+  const imm = document.body.classList.contains('immersive');
+  $('#wp-full').innerHTML = icon(imm ? 'i-shrink' : 'i-expand');
+  updateWall(new Date());
+}
+function updateWall(d) {
+  const p = partsIn(LOCAL_TZ, d);
+  if (wp.mode === 'digital') {
+    const dg = $('#wp-dg');
+    dg.querySelector('.hh').textContent = pad(p.h);
+    dg.querySelector('.mm').textContent = pad(p.mi);
+    dg.querySelector('.ss').textContent = pad(p.s);
+  } else {
+    $('#wp-h').setAttribute('transform', `rotate(${(p.h % 12 + p.mi / 60) * 30})`);
+    $('#wp-m').setAttribute('transform', `rotate(${(p.mi + p.s / 60) * 6})`);
+    $('#wp-s').setAttribute('transform', `rotate(${p.s * 6})`);
+  }
+  $('#wp-date').textContent = `${p.mo}/${p.d} ${WD[p.wd]}`;
+}
+$('#wp-mode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; wp.mode = b.dataset.m; saveWp(); renderWall(); });
+$('#wp-styles').addEventListener('click', e => { const b = e.target.closest('.st'); if (!b) return; wp[wp.mode] = b.dataset.s; saveWp(); renderWall(); });
+
+/* wake lock */
+let wakeLock = null;
+async function applyWake() {
+  const want = wp.wake && active === 'wall' && document.visibilityState === 'visible' && 'wakeLock' in navigator;
+  if (want && !wakeLock) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; $('#wp-wake').setAttribute('aria-pressed', 'false'); });
+    } catch { wakeLock = null; }
+  } else if (!want && wakeLock) {
+    try { await wakeLock.release(); } catch {}
+    wakeLock = null;
+  }
+  $('#wp-wake').setAttribute('aria-pressed', !!wakeLock);
+}
+$('#wp-wake').addEventListener('click', () => { wp.wake = !wp.wake; saveWp(); applyWake(); });
+document.addEventListener('visibilitychange', () => { applyWake(); if (document.visibilityState === 'visible') refresh(new Date()); });
+
+/* immersive */
+let peekT = null;
+function setImmersive(on) {
+  document.body.classList.toggle('immersive', on);
+  document.body.classList.remove('peek');
+  $('#wp-full').innerHTML = icon(on ? 'i-shrink' : 'i-expand');
+  $('#wp-full').setAttribute('aria-label', on ? '全画面を終了' : '全画面');
+}
+$('#wp-full').addEventListener('click', async () => {
+  const on = !document.body.classList.contains('immersive');
+  setImmersive(on);
+  try {
+    if (on && document.documentElement.requestFullscreen && !document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    if (!on && document.fullscreenElement) await document.exitFullscreen();
+  } catch {}
+});
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) setImmersive(false); });
+function peek() {
+  if (!document.body.classList.contains('immersive')) return;
+  document.body.classList.add('peek');
+  clearTimeout(peekT);
+  peekT = setTimeout(() => document.body.classList.remove('peek'), 3000);
+}
+$('#wp-stage').addEventListener('click', peek);
+$('#wp-ctl').addEventListener('pointerdown', peek);
+
+/* ================= keyboard ================= */
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, dialog')) return;
+  if (alertKind) { if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); closeAlert(); } return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (active === 'sw') {
+    if (e.key === ' ') { e.preventDefault(); swToggle(); }
+    else if (e.key === 'l' || e.key === 'r') swLeft();
+  } else if (active === 'timer' && tm.mode !== 'run' && tm.mode !== 'pause') {
+    if (/^[0-9]$/.test(e.key)) keyIn(e.key);
+    else if (e.key === 'Backspace') keyIn('bk');
+    else if (e.key === 'Enter') timerStart();
+  } else if (active === 'timer' && e.key === ' ') { e.preventDefault(); $('#t-pause').click(); }
+  else if (active === 'wall' && e.key === 'f') $('#wp-full').click();
+});
+
+/* ================= loop ================= */
+function refresh(d) {
+  if (active === 'world') updateWorld(d);
+  if (active === 'alarm') updateAlarmHero(d);
+  if (active === 'wall') updateWall(d);
+}
+let lastS = -1;
+setInterval(() => {
+  const now = Date.now();
+  checkTimer(now);
+  const s = Math.floor(now / 1000);
+  if (s === lastS) return;
+  lastS = s;
+  const d = new Date(now);
+  checkAlarms(d);
+  refresh(d);
+  if (alertKind) updateAlert(now);
+}, 100);
+(function frame() {
+  const now = Date.now();
+  if (active === 'sw' && sw.run) updateSW(now);
+  if (active === 'timer' && tm.mode === 'run') updateTimer(now);
+  requestAnimationFrame(frame);
+})();
+
+renderWorld();
+renderAlarms();
+renderSW();
+renderTimer();
+renderWall();
+show(active);
+})();
+</script>
+</body>
+</html>
